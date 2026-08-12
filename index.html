@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>USDP.POOL</title>
+
+
+  <style>
+
+    /* ==========================================
+       General
+       ========================================== */
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #0b0f19;
+      color: #ffffff;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .container {
+      width: min(900px, 92%);
+      margin: 50px auto;
+    }
+
+
+    /* ==========================================
+       USDP.POOL Header
+       ========================================== */
+
+    .brand {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+      margin-bottom: 50px;
+    }
+
+    .logo {
+      width: 75px;
+      height: 75px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid #20283a;
+    }
+
+    .brand-name {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: #8fe000;
+    }
+
+
+    /* ==========================================
+       Pools / Launchpad
+       ========================================== */
+
+    .pool-title {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      margin-bottom: 15px;
+    }
+
+    .pool-logo {
+      width: 30px;
+      height: 30px;
+      object-fit: contain;
+      border-radius: 10px;
+    }
+
+    .pool-title h1 {
+      margin: 0;
+      font-size: 30px;
+      font-weight: 700;
+    }
+
+
+    /* ==========================================
+       Data Source
+       ========================================== */
+
+    .source {
+      margin-bottom: 25px;
+      text-align: center;
+      color: #697386;
+      font-size: 13px;
+    }
+
+    .source a {
+      color: #8d96a8;
+      text-decoration: none;
+    }
+
+    .source a:hover {
+      color: #ffffff;
+      text-decoration: underline;
+    }
+
+
+    /* ==========================================
+       Market Cap / Trading Volume
+       ========================================== */
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 25px;
+    }
+
+    .card {
+      background: #111827;
+      border: 1px solid #20283a;
+      border-radius: 16px;
+      padding: 35px 30px;
+      text-align: center;
+    }
+
+    .title {
+      color: #8d96a8;
+      font-size: 18px;
+      margin-bottom: 18px;
+    }
+
+    .value {
+      font-size: 42px;
+      font-weight: 700;
+    }
+
+    .loading {
+      color: #8d96a8;
+    }
+
+
+    /* ==========================================
+       CA Section
+       ========================================== */
+
+    .contract-section {
+      margin-top: 40px;
+      text-align: center;
+    }
+
+
+    /* CA Logo + CA */
+
+    .contract-title {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      color: #8d96a8;
+
+      font-size: 15px;
+      font-weight: 600;
+
+      margin-bottom: 12px;
+    }
+
+    .ca-logo {
+      width: 28px;
+      height: 28px;
+
+      object-fit: cover;
+
+      margin-right: 8px;
+
+      border-radius: 5px;
+    }
+
+
+    /* ==========================================
+       CA Address
+       ========================================== */
+
+    .contract-address {
+      color: #ffffff;
+
+      font-size: 14px;
+
+      line-height: 1.6;
+
+      word-break: break-all;
+
+      margin-bottom: 18px;
+    }
+
+
+    /* ==========================================
+       Copy CA / BUY Buttons
+       ========================================== */
+
+    .contract-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .copy-button,
+    .buy-button {
+      min-width: 120px;
+
+      padding: 11px 22px;
+
+      border-radius: 8px;
+
+      font-size: 14px;
+
+      font-weight: 700;
+
+      cursor: pointer;
+
+      text-decoration: none;
+
+      transition: 0.2s;
+    }
+
+
+    /* Copy CA */
+
+    .copy-button {
+      background: #20283a;
+
+      color: #ffffff;
+
+      border: 1px solid #303b52;
+    }
+
+    .copy-button:hover {
+      background: #2b354b;
+    }
+
+
+    /* BUY */
+
+    .buy-button {
+      background: #8fe000;
+
+      color: #071000;
+
+      border: 1px solid #8fe000;
+    }
+
+    .buy-button:hover {
+      background: #a1f500;
+    }
+
+
+    /* ==========================================
+       Social Buttons
+       ========================================== */
+
+    .social-buttons {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .social-button {
+      width: 46px;
+      height: 46px;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      border-radius: 10px;
+
+      background: #111827;
+
+      border: 1px solid #20283a;
+
+      transition: 0.2s;
+
+      text-decoration: none;
+    }
+
+    .social-button:hover {
+      transform: translateY(-2px);
+
+      border-color: #8fe000;
+
+      background: #182131;
+    }
+
+    .social-button img {
+      width: 33px;
+      height: 33px;
+
+      object-fit: contain;
+    }
+
+
+    /* ==========================================
+       Copy Success Message
+       ========================================== */
+
+    .copy-message {
+      margin-top: 12px;
+
+      color: #8fe000;
+
+      font-size: 13px;
+
+      display: none;
+    }
+
+
+    /* ==========================================
+       Error
+       ========================================== */
+
+    .error {
+      margin-top: 25px;
+
+      padding: 15px;
+
+      border-radius: 10px;
+
+      background: #29151a;
+
+      border: 1px solid #5b222b;
+
+      color: #ff9aa5;
+
+      text-align: center;
+
+      display: none;
+    }
+
+
+    /* ==========================================
+       Disclaimer
+       ========================================== */
+
+    .disclaimer {
+      margin-top: 45px;
+
+      padding: 0;
+
+      color: #697386;
+
+      font-size: 12px;
+
+      line-height: 1.7;
+
+      text-align: center;
+    }
+
+    .disclaimer p {
+      margin: 0;
+    }
+
+    .disclaimer strong {
+      color: #8d96a8;
+    }
+
+
+    /* ==========================================
+       Mobile
+       ========================================== */
+
+    @media (max-width: 700px) {
+
+      .cards {
+        grid-template-columns: 1fr;
+      }
+
+      .container {
+        margin: 40px auto;
+      }
+
+      .brand-name {
+        font-size: 27px;
+      }
+
+      .pool-title {
+        gap: 12px;
+      }
+
+      .pool-title h1 {
+        font-size: 23px;
+      }
+
+      .pool-logo {
+        width: 50px;
+        height: 50px;
+      }
+
+      .value {
+        font-size: 34px;
+      }
+
+      .contract-address {
+        font-size: 13px;
+      }
+
+      .disclaimer {
+        font-size: 11px;
+      }
+
+    }
+
+  </style>
+
+</head>
+
+
+<body>
+
+
+  <div class="container">
+
+
+    <!-- ======================================
+         USDP.POOL
+         ====================================== -->
+
+    <div class="brand">
+
+      <img
+        src="logo.png.webp"
+        class="logo"
+        alt="USDP.POOL logo"
+      >
+
+      <div class="brand-name">
+        USDP.POOL
+      </div>
+
+    </div>
+
+
+    <!-- ======================================
+         Pools / Launchpad
+         ====================================== -->
+
+    <div class="pool-title">
+
+      <img
+        src="pool-logo.png"
+        class="pool-logo"
+        alt="Pools Launchpad"
+      >
+
+      <h1>
+        Pools / Launchpad
+      </h1>
+
+    </div>
+
+
+    <!-- ======================================
+         Data Source
+         ====================================== -->
+
+    <div class="source">
+
+      Data source:
+
+      <a
+        href="https://www.coingecko.com/ko/categories/pools-launchpad"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        CoinGecko
+      </a>
+
+    </div>
+
+
+    <!-- ======================================
+         Market Cap / Trading Volume
+         ====================================== -->
+
+    <div class="cards">
+
+
+      <!-- Market Cap -->
+
+      <div class="card">
+
+        <div class="title">
+          Market Cap
+        </div>
+
+        <div
+          id="marketCap"
+          class="value loading"
+        >
+          Loading...
+        </div>
+
+      </div>
+
+
+      <!-- 24h Trading Volume -->
+
+      <div class="card">
+
+        <div class="title">
+          24h Trading Volume
+        </div>
+
+        <div
+          id="volume24h"
+          class="value loading"
+        >
+          Loading...
+        </div>
+
+      </div>
+
+
+    </div>
+
+
+    <!-- ======================================
+         CA
+         ====================================== -->
+
+    <div class="contract-section">
+
+
+      <!-- CA Logo -->
+
+      <div class="contract-title">
+
+        <img
+          src="robinhood.png"
+          class="ca-logo"
+          alt="CA logo"
+        >
+
+        <span>
+          CA
+        </span>
+
+      </div>
+
+
+      <!-- CA Address -->
+
+      <div
+        class="contract-address"
+        id="contractAddress"
+      >
+        0xe09FFbb33b7124FC72791cF3a32dce94aA261144
+      </div>
+
+
+      <!-- Buttons -->
+
+      <div class="contract-buttons">
+
+
+        <!-- Copy CA -->
+
+        <button
+          class="copy-button"
+          onclick="copyCA()"
+        >
+          Copy CA
+        </button>
+
+
+        <!-- BUY -->
+
+        <a
+          class="buy-button"
+          href="https://pools.trade/t/0xe09FFbb33b7124FC72791cF3a32dce94aA261144"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          BUY
+        </a>
+
+
+      </div>
+
+
+      <!-- ======================================
+           X / Telegram
+           ====================================== -->
+
+      <div class="social-buttons">
+
+
+        <!-- X / Twitter -->
+
+        <a
+          href="https://x.com/USDP_POOL"
+          class="social-button"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="X / Twitter"
+        >
+
+          <img
+            src="twitter.png"
+            alt="X / Twitter"
+          >
+
+        </a>
+
+
+        <!-- Telegram -->
+
+        <a
+          href="https://t.me/usdp_pool"
+          class="social-button"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Telegram"
+        >
+
+          <img
+            src="telegram.png"
+            alt="Telegram"
+          >
+
+        </a>
+
+
+      </div>
+
+
+      <!-- Copy Success Message -->
+
+      <div
+        id="copyMessage"
+        class="copy-message"
+      >
+        CA copied successfully.
+      </div>
+
+
+    </div>
+
+
+    <!-- ======================================
+         Error Message
+         ====================================== -->
+
+    <div
+      id="errorBox"
+      class="error"
+    ></div>
+
+
+    <!-- ======================================
+         Disclaimer
+         ====================================== -->
+
+    <div class="disclaimer">
+
+      <p>
+
+        <strong>
+          USDP is a meme coin for entertainment and community purposes only. It is NOT a stablecoin, investment product, or financial instrument.
+        </strong>
+
+        No profit or price appreciation is guaranteed. Cryptocurrency and meme coin trading carries a high risk of loss, including the possibility of losing your entire investment.
+
+        <strong>
+          DYOR. Trade at your own risk.
+        </strong>
+
+      </p>
+
+    </div>
+
+
+  </div>
+
+
+
+<script>
+
+
+  /* ==========================================
+     Format Money
+     ========================================== */
+
+  function formatMoney(value) {
+
+
+    if (
+      value === null ||
+      value === undefined ||
+      !Number.isFinite(Number(value))
+    ) {
+
+      return "-";
+
+    }
+
+
+    value = Number(value);
+
+
+    if (value >= 1e12) {
+
+      return "$" +
+        (value / 1e12).toFixed(2) +
+        "T";
+
+    }
+
+
+    if (value >= 1e9) {
+
+      return "$" +
+        (value / 1e9).toFixed(2) +
+        "B";
+
+    }
+
+
+    if (value >= 1e6) {
+
+      return "$" +
+        (value / 1e6).toFixed(2) +
+        "M";
+
+    }
+
+
+    if (value >= 1e3) {
+
+      return "$" +
+        (value / 1e3).toFixed(2) +
+        "K";
+
+    }
+
+
+    return "$" +
+      value.toFixed(2);
+
+  }
+
+
+
+  /* ==========================================
+     Get CoinGecko Data
+     ========================================== */
+
+  async function loadData() {
+
+
+    try {
+
+
+      const response =
+        await fetch("/api/current");
+
+
+      const result =
+        await response.json();
+
+
+      if (!result.success) {
+
+        throw new Error(
+          result.error ||
+          "Failed to load data."
+        );
+
+      }
+
+
+      const data =
+        result.data;
+
+
+      /* Market Cap */
+
+      document.getElementById(
+        "marketCap"
+      ).textContent =
+        formatMoney(
+          data.marketCap
+        );
+
+
+      /* 24h Trading Volume */
+
+      document.getElementById(
+        "volume24h"
+      ).textContent =
+        formatMoney(
+          data.volume24h
+        );
+
+
+      /* Remove Loading */
+
+      document.getElementById(
+        "marketCap"
+      ).classList.remove(
+        "loading"
+      );
+
+
+      document.getElementById(
+        "volume24h"
+      ).classList.remove(
+        "loading"
+      );
+
+
+      /* Hide Error */
+
+      document.getElementById(
+        "errorBox"
+      ).style.display =
+        "none";
+
+
+    } catch (error) {
+
+
+      console.error(error);
+
+
+      const errorBox =
+        document.getElementById(
+          "errorBox"
+        );
+
+
+      errorBox.textContent =
+        "Failed to load data: " +
+        error.message;
+
+
+      errorBox.style.display =
+        "block";
+
+
+    }
+
+  }
+
+
+
+  /* ==========================================
+     Copy CA
+     ========================================== */
+
+  async function copyCA() {
+
+
+    const address =
+      "0xe09FFbb33b7124FC72791cF3a32dce94aA261144";
+
+
+    try {
+
+
+      await navigator.clipboard.writeText(
+        address
+      );
+
+
+      const message =
+        document.getElementById(
+          "copyMessage"
+        );
+
+
+      message.textContent =
+        "CA copied successfully.";
+
+
+      message.style.display =
+        "block";
+
+
+      setTimeout(
+        function() {
+
+          message.style.display =
+            "none";
+
+        },
+        1500
+      );
+
+
+    } catch (error) {
+
+
+      alert(
+        "Failed to copy CA. Please copy the address manually."
+      );
+
+
+    }
+
+  }
+
+
+
+  /* ==========================================
+     Initial Load
+     ========================================== */
+
+  loadData();
+
+
+
+  /* ==========================================
+     Auto Update Every 5 Minutes
+     ========================================== */
+
+  setInterval(
+    loadData,
+    5 * 60 * 1000
+  );
+
+
+</script>
+
+
+</body>
+
+</html>
