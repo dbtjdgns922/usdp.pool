@@ -10,73 +10,119 @@ const PORT = process.env.PORT || 3000;
 // CoinGecko 설정
 // =====================================================
 
-// 서버 환경변수로 API Key를 넣는 것을 권장합니다.
-// Windows:
-// set COINGECKO_API_KEY=여기에_API_KEY
-//
-// Linux:
-// export COINGECKO_API_KEY=여기에_API_KEY
+const COINGECKO_API_KEY =
+  process.env.COINGECKO_API_KEY || "";
 
-const COINGECKO_API_KEY = process.env.COINGECKO_API_KEY || "";
-
-// 사용자가 요청한 CoinGecko 카테고리
 const CATEGORY_ID = "pools-launchpad";
 
 const API_URL =
   "https://api.coingecko.com/api/v3/coins/categories";
 
-// API 요청 간격
-const UPDATE_INTERVAL = 5 * 60 * 1000;
+// =====================================================
+// 캐시 설정
+// =====================================================
 
-// 데이터 저장 파일
-const HISTORY_FILE = path.join(__dirname, "history.json");
+// 5분
+const CACHE_DURATION = 5 * 60 * 1000;
+
+// 정상 업데이트 실패 후 재시도하기 전 최소 대기시간
+const RETRY_AFTER_ERROR = 5 * 60 * 1000;
+
+// =====================================================
+// 파일
+// =====================================================
+
+const CACHE_FILE =
+  path.join(__dirname, "cache.json");
+
+const HISTORY_FILE =
+  path.join(__dirname, "history.json");
 
 // =====================================================
 // Express
 // =====================================================
 
-app.use(express.static(__dirname));
-
 app.use(express.json());
 
+app.use(express.static(__dirname));
+
 // =====================================================
-// history.json 읽기
+// 메모리 캐시
 // =====================================================
 
-function loadHistory() {
+let latestData = null;
+
+let lastSuccessfulUpdate = 0;
+
+let lastUpdateAttempt = 0;
+
+let lastError = null;
+
+let isUpdating = false;
+
+// =====================================================
+// 파일 읽기
+// =====================================================
+
+function readJsonFile(file) {
+
   try {
-    if (!fs.existsSync(HISTORY_FILE)) {
-      return [];
+
+    if (!fs.existsSync(file)) {
+      return null;
     }
 
-    const data = fs.readFileSync(HISTORY_FILE, "utf8");
+    const content =
+      fs.readFileSync(
+        file,
+        "utf8"
+      );
 
-    if (!data.trim()) {
-      return [];
+    if (!content.trim()) {
+      return null;
     }
 
-    const parsed = JSON.parse(data);
+    return JSON.parse(content);
 
-    return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
-    console.error("history.json 읽기 오류:", error);
-    return [];
+
+    console.error(
+      `JSON 파일 읽기 오류 (${file}):`,
+      error.message
+    );
+
+    return null;
   }
 }
 
 // =====================================================
-// history.json 저장
+// JSON 파일 저장
 // =====================================================
 
-function saveHistory(history) {
+function writeJsonFile(file, data) {
+
   try {
+
     fs.writeFileSync(
-      HISTORY_FILE,
-      JSON.stringify(history, null, 2),
+      file,
+      JSON.stringify(
+        data,
+        null,
+        2
+      ),
       "utf8"
     );
+
+    return true;
+
   } catch (error) {
-    console.error("history.json 저장 오류:", error);
+
+    console.error(
+      `JSON 파일 저장 오류 (${file}):`,
+      error.message
+    );
+
+    return false;
   }
 }
 
@@ -85,7 +131,9 @@ function saveHistory(history) {
 // =====================================================
 
 function safeNumber(value) {
-  const number = Number(value);
+
+  const number =
+    Number(value);
 
   if (!Number.isFinite(number)) {
     return null;
@@ -95,237 +143,923 @@ function safeNumber(value) {
 }
 
 // =====================================================
+// 캐시 불러오기
+// =====================================================
+
+function loadCache() {
+
+  const cache =
+    readJsonFile(CACHE_FILE);
+
+  if (!cache) {
+    return;
+  }
+
+  if (
+    cache.data &&
+    typeof cache.data === "object"
+  ) {
+
+    latestData =
+      cache.data;
+
+    lastSuccessfulUpdate =
+      Number(
+        cache.savedAt ||
+        cache.data.timestamp ||
+        0
+      );
+
+    console.log(
+      "기존 캐시 데이터를 불러왔습니다."
+    );
+
+  }
+
+}
+
+// =====================================================
+// 캐시 저장
+// =====================================================
+
+function saveCache(data) {
+
+  const cache = {
+
+    savedAt:
+      Date.now(),
+
+    data:
+      data
+
+  };
+
+  writeJsonFile(
+    CACHE_FILE,
+    cache
+  );
+}
+
+// =====================================================
+// History 불러오기
+// =====================================================
+
+function loadHistory() {
+
+  const history =
+    readJsonFile(HISTORY_FILE);
+
+  if (!Array.isArray(history)) {
+    return [];
+  }
+
+  return history;
+}
+
+// =====================================================
+// History 저장
+// =====================================================
+
+function saveHistory(history) {
+
+  writeJsonFile(
+    HISTORY_FILE,
+    history
+  );
+}
+
+// =====================================================
+// History 추가
+// =====================================================
+
+function addHistory(data) {
+
+  let history =
+    loadHistory();
+
+  history.push(data);
+
+  // 최근 90일만 보관
+
+  const ninetyDaysAgo =
+    Date.now() -
+    90 *
+    24 *
+    60 *
+    60 *
+    1000;
+
+  history =
+    history.filter(
+      item =>
+        Number(item.timestamp) >=
+        ninetyDaysAgo
+    );
+
+  saveHistory(history);
+}
+
+// =====================================================
 // CoinGecko API 호출
 // =====================================================
 
 async function fetchCategory() {
+
   const headers = {
-    accept: "application/json"
+
+    accept:
+      "application/json"
+
   };
 
-  // API Key가 있으면 헤더에 추가
+  // API Key
+
   if (COINGECKO_API_KEY) {
-    headers["x-cg-demo-api-key"] = COINGECKO_API_KEY;
+
+    headers[
+      "x-cg-demo-api-key"
+    ] =
+      COINGECKO_API_KEY;
+
   }
 
-  const response = await fetch(API_URL, {
-    method: "GET",
-    headers
-  });
+  console.log(
+    "CoinGecko API 요청..."
+  );
+
+  const response =
+    await fetch(
+      API_URL,
+      {
+        method: "GET",
+        headers
+      }
+    );
+
+  // =================================================
+  // Rate Limit
+  // =================================================
+
+  if (
+    response.status === 429
+  ) {
+
+    const text =
+      await response.text();
+
+    const error =
+      new Error(
+        `CoinGecko API Rate Limit (429): ${text}`
+      );
+
+    error.code = 429;
+
+    throw error;
+  }
+
+  // =================================================
+  // 기타 HTTP 오류
+  // =================================================
 
   if (!response.ok) {
-    const text = await response.text();
+
+    const text =
+      await response.text();
+
+    const error =
+      new Error(
+        `CoinGecko API 오류 ${response.status}: ${text}`
+      );
+
+    error.code =
+      response.status;
+
+    throw error;
+  }
+
+  // =================================================
+  // JSON
+  // =================================================
+
+  const categories =
+    await response.json();
+
+  if (!Array.isArray(categories)) {
 
     throw new Error(
-      `CoinGecko API 오류 ${response.status}: ${text}`
+      "CoinGecko 응답 형식이 올바르지 않습니다."
     );
   }
 
-  const categories = await response.json();
+  // =================================================
+  // Pools / Launchpad 찾기
+  // =================================================
 
-  if (!Array.isArray(categories)) {
-    throw new Error("CoinGecko 응답 형식이 올바르지 않습니다.");
-  }
-
-  const category = categories.find(
-    item => item.id === CATEGORY_ID
-  );
+  const category =
+    categories.find(
+      item =>
+        item.id === CATEGORY_ID
+    );
 
   if (!category) {
+
     throw new Error(
       `카테고리 '${CATEGORY_ID}'를 찾을 수 없습니다.`
     );
   }
 
+  // =================================================
+  // 데이터 반환
+  // =================================================
+
   return {
-    timestamp: Date.now(),
 
-    date: new Date().toISOString(),
+    timestamp:
+      Date.now(),
 
-    categoryId: category.id,
+    date:
+      new Date().toISOString(),
 
-    categoryName: category.name,
+    categoryId:
+      category.id,
 
-    marketCap: safeNumber(category.market_cap),
+    categoryName:
+      category.name,
 
-    volume24h: safeNumber(category.volume_24h),
+    marketCap:
+      safeNumber(
+        category.market_cap
+      ),
 
-    marketCapChange24h: safeNumber(
-      category.market_cap_change_24h
-    ),
+    volume24h:
+      safeNumber(
+        category.volume_24h
+      ),
 
-    updatedAt: category.updated_at || null
+    marketCapChange24h:
+      safeNumber(
+        category.market_cap_change_24h
+      ),
+
+    updatedAt:
+      category.updated_at || null
+
   };
+
 }
 
 // =====================================================
-// 데이터 수집
+// 데이터 업데이트
 // =====================================================
 
-let latestData = null;
+async function updateData(
+  force = false
+) {
 
-async function updateData() {
+  // 이미 업데이트 중이면 중복 요청 방지
+
+  if (isUpdating) {
+
+    console.log(
+      "이미 데이터 업데이트가 진행 중입니다."
+    );
+
+    return latestData;
+  }
+
+  const now =
+    Date.now();
+
+  // =================================================
+  // 캐시가 아직 유효하면 API 요청하지 않음
+  // =================================================
+
+  if (
+    !force &&
+    latestData &&
+    lastSuccessfulUpdate > 0 &&
+    now -
+      lastSuccessfulUpdate <
+      CACHE_DURATION
+  ) {
+
+    console.log(
+      "캐시가 유효합니다. CoinGecko 요청을 건너뜁니다."
+    );
+
+    return latestData;
+  }
+
+  // =================================================
+  // 이전 실패 후 너무 빨리 재시도하지 않음
+  // =================================================
+
+  if (
+    !force &&
+    lastUpdateAttempt > 0 &&
+    now -
+      lastUpdateAttempt <
+      RETRY_AFTER_ERROR &&
+    lastError
+  ) {
+
+    console.log(
+      "최근 API 오류가 발생했습니다. 재시도를 건너뜁니다."
+    );
+
+    return latestData;
+  }
+
+  isUpdating = true;
+
+  lastUpdateAttempt =
+    now;
+
   try {
-    console.log(
-      `[${new Date().toLocaleString()}] CoinGecko 데이터 업데이트 중...`
-    );
-
-    const data = await fetchCategory();
-
-    latestData = data;
-
-    let history = loadHistory();
-
-    history.push(data);
-
-    // 최근 90일만 보관
-    const ninetyDaysAgo =
-      Date.now() - 90 * 24 * 60 * 60 * 1000;
-
-    history = history.filter(
-      item => Number(item.timestamp) >= ninetyDaysAgo
-    );
-
-    saveHistory(history);
 
     console.log(
-      "업데이트 완료:",
-      {
-        marketCap: data.marketCap,
-        volume24h: data.volume24h
-      }
+      "=========================================="
     );
+
+    console.log(
+      "CoinGecko 데이터 업데이트 시작"
+    );
+
+    console.log(
+      new Date().toISOString()
+    );
+
+    console.log(
+      "=========================================="
+    );
+
+    // API 요청
+
+    const data =
+      await fetchCategory();
+
+    // =================================================
+    // 성공
+    // =================================================
+
+    latestData =
+      data;
+
+    lastSuccessfulUpdate =
+      Date.now();
+
+    lastError =
+      null;
+
+    // 캐시 저장
+
+    saveCache(data);
+
+    // History 저장
+
+    addHistory(data);
+
+    console.log(
+      "CoinGecko 업데이트 성공"
+    );
+
+    console.log({
+
+      marketCap:
+        data.marketCap,
+
+      volume24h:
+        data.volume24h
+
+    });
+
+    return data;
+
   } catch (error) {
+
+    lastError =
+      error.message;
+
+    // =================================================
+    // 중요:
+    // 이전 데이터가 있다면 그대로 유지
+    // =================================================
+
+    if (latestData) {
+
+      console.warn(
+        "CoinGecko 업데이트 실패."
+      );
+
+      console.warn(
+        "마지막 정상 데이터를 유지합니다."
+      );
+
+      console.warn(
+        error.message
+      );
+
+      return latestData;
+
+    }
+
+    // =================================================
+    // 이전 데이터도 없는 경우
+    // =================================================
+
     console.error(
-      "데이터 업데이트 실패:",
+      "CoinGecko 데이터 업데이트 실패:"
+    );
+
+    console.error(
       error.message
     );
+
+    return null;
+
+  } finally {
+
+    isUpdating =
+      false;
+
   }
 }
 
 // =====================================================
-// 처음 서버 실행
+// 서버 시작 시 캐시 불러오기
 // =====================================================
 
-updateData();
+loadCache();
 
+// =====================================================
+// 처음 데이터 업데이트
+// =====================================================
+
+setTimeout(
+  async () => {
+
+    try {
+
+      await updateData();
+
+    } catch (error) {
+
+      console.error(
+        "초기 업데이트 오류:",
+        error.message
+      );
+
+    }
+
+  },
+  1000
+);
+
+// =====================================================
 // 5분마다 업데이트
-setInterval(updateData, UPDATE_INTERVAL);
+// =====================================================
+
+setInterval(
+  async () => {
+
+    try {
+
+      await updateData();
+
+    } catch (error) {
+
+      console.error(
+        "자동 업데이트 오류:",
+        error.message
+      );
+
+    }
+
+  },
+  CACHE_DURATION
+);
 
 // =====================================================
 // 현재 데이터 API
 // =====================================================
 
-app.get("/api/current", async (req, res) => {
-  try {
-    if (!latestData) {
-      await updateData();
+app.get(
+  "/api/current",
+  async (req, res) => {
+
+    try {
+
+      // 캐시가 없으면 데이터 요청
+
+      if (!latestData) {
+
+        await updateData();
+
+      }
+
+      // =================================================
+      // 여전히 데이터가 없다면 오류
+      // =================================================
+
+      if (!latestData) {
+
+        return res.status(503).json({
+
+          success:
+            false,
+
+          data:
+            null,
+
+          error:
+            lastError ||
+            "Market data is temporarily unavailable.",
+
+          cached:
+            false
+
+        });
+
+      }
+
+      // =================================================
+      // 정상 응답
+      // =================================================
+
+      const age =
+        Date.now() -
+        lastSuccessfulUpdate;
+
+      const cached =
+        age >
+        CACHE_DURATION;
+
+      res.json({
+
+        success:
+          true,
+
+        data:
+          latestData,
+
+        cached:
+          cached,
+
+        cacheAgeSeconds:
+          Math.floor(
+            age / 1000
+          ),
+
+        lastSuccessfulUpdate:
+          lastSuccessfulUpdate,
+
+        lastError:
+          lastError
+
+      });
+
+    } catch (error) {
+
+      console.error(
+        "/api/current 오류:",
+        error.message
+      );
+
+      // =================================================
+      // 마지막 데이터가 있으면 그것을 반환
+      // =================================================
+
+      if (latestData) {
+
+        return res.json({
+
+          success:
+            true,
+
+          data:
+            latestData,
+
+          cached:
+            true,
+
+          stale:
+            true,
+
+          lastError:
+            error.message
+
+        });
+
+      }
+
+      // =================================================
+      // 데이터가 전혀 없으면 503
+      // =================================================
+
+      res.status(503).json({
+
+        success:
+          false,
+
+        data:
+          null,
+
+        error:
+          error.message
+
+      });
+
     }
 
-    res.json({
-      success: true,
-      data: latestData
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
   }
-});
+);
 
 // =====================================================
-// 역사 데이터 API
+// History API
 // =====================================================
 
-app.get("/api/history", (req, res) => {
-  try {
-    const days = Number(req.query.days || 7);
+app.get(
+  "/api/history",
+  (req, res) => {
 
-    const validDays =
-      [1, 7, 30, 90].includes(days)
-        ? days
-        : 7;
+    try {
 
-    const history = loadHistory();
+      const days =
+        Number(
+          req.query.days || 7
+        );
 
-    const from =
-      Date.now() -
-      validDays * 24 * 60 * 60 * 1000;
+      const validDays =
+        [1, 7, 30, 90]
+          .includes(days)
+          ? days
+          : 7;
 
-    const filtered = history.filter(
-      item => Number(item.timestamp) >= from
-    );
+      const history =
+        loadHistory();
 
-    res.json({
-      success: true,
+      const from =
+        Date.now() -
+        validDays *
+        24 *
+        60 *
+        60 *
+        1000;
 
-      days: validDays,
+      const filtered =
+        history.filter(
+          item =>
+            Number(
+              item.timestamp
+            ) >= from
+        );
 
-      data: filtered
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+      res.json({
+
+        success:
+          true,
+
+        days:
+          validDays,
+
+        data:
+          filtered
+
+      });
+
+    } catch (error) {
+
+      res.status(500).json({
+
+        success:
+          false,
+
+        error:
+          error.message
+
+      });
+
+    }
+
   }
-});
+);
 
 // =====================================================
 // 수동 업데이트 API
 // =====================================================
 
-app.get("/api/update", async (req, res) => {
-  try {
-    await updateData();
+app.get(
+  "/api/update",
+  async (req, res) => {
 
-    res.json({
-      success: true,
-      data: latestData
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+    try {
+
+      /*
+       * 중요:
+       * force=true를 사용하더라도 CoinGecko의
+       * Rate Limit을 무시하면 안 됩니다.
+       */
+
+      const data =
+        await updateData(true);
+
+      if (!data) {
+
+        return res.status(503).json({
+
+          success:
+            false,
+
+          data:
+            null,
+
+          error:
+            lastError ||
+            "Unable to update data."
+
+        });
+
+      }
+
+      res.json({
+
+        success:
+          true,
+
+        data:
+          data,
+
+        cached:
+          Date.now() -
+            lastSuccessfulUpdate >
+          CACHE_DURATION,
+
+        lastError:
+          lastError
+
+      });
+
+    } catch (error) {
+
+      console.error(
+        "/api/update 오류:",
+        error.message
+      );
+
+      if (latestData) {
+
+        return res.json({
+
+          success:
+            true,
+
+          data:
+            latestData,
+
+          cached:
+            true,
+
+          stale:
+            true,
+
+          error:
+            error.message
+
+        });
+
+      }
+
+      res.status(503).json({
+
+        success:
+          false,
+
+        data:
+          null,
+
+        error:
+          error.message
+
+      });
+
+    }
+
   }
-});
+);
 
 // =====================================================
 // 서버 상태
 // =====================================================
 
-app.get("/api/status", (req, res) => {
-  const history = loadHistory();
+app.get(
+  "/api/status",
+  (req, res) => {
 
-  res.json({
-    success: true,
+    const history =
+      loadHistory();
 
-    category: CATEGORY_ID,
+    const cacheAge =
+      lastSuccessfulUpdate
+        ? Date.now() -
+          lastSuccessfulUpdate
+        : null;
 
-    latestData,
+    res.json({
 
-    historyCount: history.length,
+      success:
+        true,
 
-    updateIntervalMinutes: 5,
+      category:
+        CATEGORY_ID,
 
-    serverTime: new Date().toISOString()
-  });
-});
+      latestData:
+        latestData,
+
+      historyCount:
+        history.length,
+
+      cacheDurationMinutes:
+        5,
+
+      cacheAgeSeconds:
+        cacheAge !== null
+          ? Math.floor(
+              cacheAge / 1000
+            )
+          : null,
+
+      isUpdating:
+        isUpdating,
+
+      lastSuccessfulUpdate:
+        lastSuccessfulUpdate
+          ? new Date(
+              lastSuccessfulUpdate
+            ).toISOString()
+          : null,
+
+      lastUpdateAttempt:
+        lastUpdateAttempt
+          ? new Date(
+              lastUpdateAttempt
+            ).toISOString()
+          : null,
+
+      lastError:
+        lastError,
+
+      serverTime:
+        new Date().toISOString()
+
+    });
+
+  }
+);
 
 // =====================================================
 // 서버 시작
 // =====================================================
 
-app.listen(PORT, () => {
-  console.log("");
-  console.log("==========================================");
-  console.log(" Pools / Launchpad Dashboard");
-  console.log("==========================================");
-  console.log(`서버: http://localhost:${PORT}`);
-  console.log(`카테고리: ${CATEGORY_ID}`);
-  console.log("업데이트: 5분");
-  console.log("==========================================");
-  console.log("");
-});
+app.listen(
+  PORT,
+  "0.0.0.0",
+  () => {
+
+    console.log("");
+
+    console.log(
+      "=========================================="
+    );
+
+    console.log(
+      " USDP.POOL Dashboard"
+    );
+
+    console.log(
+      "=========================================="
+    );
+
+    console.log(
+      `Port: ${PORT}`
+    );
+
+    console.log(
+      `Category: ${CATEGORY_ID}`
+    );
+
+    console.log(
+      "Cache: 5 minutes"
+    );
+
+    console.log(
+      "Rate Limit protection: ENABLED"
+    );
+
+    console.log(
+      "=========================================="
+    );
+
+    console.log("");
+
+  }
+);
