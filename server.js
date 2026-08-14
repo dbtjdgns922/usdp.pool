@@ -25,7 +25,8 @@ const API_URL =
 // 5분
 const CACHE_DURATION = 5 * 60 * 1000;
 
-// 정상 업데이트 실패 후 재시도하기 전 최소 대기시간
+// API 오류/429 발생 후 재시도하기 전 최소 대기시간
+// CoinGecko Rate Limit 보호를 위해 최소 5분 대기
 const RETRY_AFTER_ERROR = 5 * 60 * 1000;
 
 // =====================================================
@@ -314,6 +315,13 @@ async function fetchCategory() {
 
     error.code = 429;
 
+    const retryAfter =
+      response.headers.get("retry-after");
+
+    if (retryAfter) {
+      error.retryAfter = retryAfter;
+    }
+
     throw error;
   }
 
@@ -558,6 +566,14 @@ async function updateData(
       console.warn(
         error.message
       );
+
+      if (error.code === 429 && error.retryAfter) {
+
+        console.warn(
+          `CoinGecko Retry-After: ${error.retryAfter}`
+        );
+
+      }
 
       return latestData;
 
@@ -856,12 +872,12 @@ app.get(
 
       /*
        * 중요:
-       * force=true를 사용하더라도 CoinGecko의
-       * Rate Limit을 무시하면 안 됩니다.
+       * 수동 업데이트도 5분 캐시와 Rate Limit 보호를 적용합니다.
+       * force=true로 CoinGecko 요청을 강제로 발생시키지 않습니다.
        */
 
       const data =
-        await updateData(true);
+        await updateData(false);
 
       if (!data) {
 
